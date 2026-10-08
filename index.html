@@ -316,6 +316,8 @@
     document.addEventListener(ev, ensureAudio, { capture: true, passive: true })
   );
 
+  const SFX_GAIN = 1.15;   // 音效整体音量系数（放大 15%），调全局音量只改这里
+
   function tone(freq, dur, type, vol, when) {
     const t0 = audioCtx.currentTime + (when || 0);
     const osc = audioCtx.createOscillator();
@@ -323,7 +325,7 @@
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
+    g.gain.exponentialRampToValueAtTime(vol * SFX_GAIN, t0 + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     osc.connect(g).connect(audioCtx.destination);
     osc.start(t0);
@@ -343,7 +345,7 @@
     filter.frequency.value = 900;
     filter.Q.value = 0.8;
     const g = audioCtx.createGain();
-    g.gain.value = 0.5;
+    g.gain.value = 0.5 * SFX_GAIN;
     src.connect(filter).connect(g).connect(audioCtx.destination);
     src.start();
   }
@@ -370,7 +372,7 @@
     osc.frequency.setValueAtTime(220, t0);
     osc.frequency.exponentialRampToValueAtTime(70, t0 + 0.7);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.18 * SFX_GAIN, t0 + 0.03);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.75);
     osc.connect(g).connect(audioCtx.destination);
     osc.start(t0);
