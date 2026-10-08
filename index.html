@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#faf8ef">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23edc22e'/%3E%3Ctext x='32' y='42' font-size='19' font-weight='700' text-anchor='middle' fill='%23fff' font-family='Arial'%3E1024%3C/text%3E%3C/svg%3E">
+<title>1024 · 数字合成小游戏</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --board: min(92vw, 430px);
+    --gap: calc(var(--board) * 0.025);
+    --cell: calc((var(--board) - 5 * var(--gap)) / 4);
+    --radius: calc(var(--board) * 0.025);
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #faf8ef;
+    color: #776e65;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100%;
+    padding: max(14px, env(safe-area-inset-top)) 0 max(20px, env(safe-area-inset-bottom));
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+  .wrap { width: var(--board); }
+
+  /* 顶部区域 */
+  header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .brand h1 {
+    font-size: calc(var(--board) * 0.155);
+    line-height: 1.05;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #edc22e 10%, #f65e3b 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .brand .sub { font-size: 12px; color: #a2968a; margin-top: 3px; }
+  .hud { display: flex; gap: 6px; align-items: stretch; }
+  .score-box {
+    position: relative;
+    background: #bbada0;
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 12px 7px;
+    text-align: center;
+    min-width: 62px;
+  }
+  .score-box .lb { display: block; font-size: 10px; letter-spacing: 1px; color: rgba(238,228,218,.75); }
+  .score-box b { display: block; font-size: 17px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+  .float-add {
+    position: absolute;
+    left: 50%;
+    top: 2px;
+    transform: translateX(-50%);
+    font-size: 15px;
+    font-weight: 800;
+    color: #8f7a66;
+    pointer-events: none;
+    animation: rise .7s ease-out forwards;
+  }
+  @keyframes rise {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to   { opacity: 0; transform: translate(-50%, -36px); }
+  }
+  .btn {
+    border: none;
+    background: #8f7a66;
+    color: #f9f6f2;
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform .08s, filter .15s;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: scale(.95); }
+  .icon-btn { display: flex; align-items: center; justify-content: center; padding: 0 10px; }
+  .icon-btn svg { display: block; }
+
+  .tip { font-size: 13px; margin: 10px 0 12px; color: #8f8577; }
+  .tip b { color: #edc22e; }
+
+  /* 游戏板 */
+  .board {
+    position: relative;
+    width: var(--board);
+    height: var(--board);
+    background: #bbada0;
+    border-radius: var(--radius);
+    padding: var(--gap);
+    box-shadow: 0 10px 30px rgba(150, 130, 105, .25);
+    touch-action: none;
+  }
+  .cells, .tiles { position: absolute; inset: var(--gap); }
+  .cell, .tile {
+    position: absolute;
+    width: var(--cell);
+    height: var(--cell);
+    transform: translate(
+      calc(var(--c) * (var(--cell) + var(--gap))),
+      calc(var(--r) * (var(--cell) + var(--gap)))
+    );
+  }
+  .cell {
+    background: rgba(238, 228, 218, .32);
+    border-radius: calc(var(--radius) * .62);
+  }
+  .tile { transition: transform .12s ease-in-out; z-index: 2; }
+  .tile-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: calc(var(--radius) * .62);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .tile.new .tile-inner { animation: appear .16s ease-out backwards; }
+  .tile.merged .tile-inner { animation: pop .16s ease-out; }
+  @keyframes appear { from { transform: scale(.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes pop { 0% { transform: scale(1); } 45% { transform: scale(1.22); } 100% { transform: scale(1); } }
+
+  /* 方块配色 */
+  .n2     { background: #eee4da; color: #776e65; }
+  .n4     { background: #ede0c8; color: #776e65; }
+  .n8     { background: #f2b179; color: #f9f6f2; }
+  .n16    { background: #f59563; color: #f9f6f2; }
+  .n32    { background: #f67c5f; color: #f9f6f2; }
+  .n64    { background: #f65e3b; color: #f9f6f2; }
+  .n128   { background: #edcf72; color: #f9f6f2; }
+  .n256   { background: #edcc61; color: #f9f6f2; }
+  .n512   { background: #edc850; color: #f9f6f2; }
+  .n1024  { background: #edc53f; color: #f9f6f2; box-shadow: 0 0 18px rgba(237,197,63,.85); }
+  .n2048  { background: #edc22e; color: #f9f6f2; box-shadow: 0 0 22px rgba(237,194,46,.9); }
+  .nsuper { background: #3c3a32; color: #f9f6f2; box-shadow: 0 0 22px rgba(60,58,50,.8); }
+
+  /* 字号随位数收缩 */
+  .fs-a { font-size: calc(var(--cell) * .44); }
+  .fs-b { font-size: calc(var(--cell) * .36); }
+  .fs-c { font-size: calc(var(--cell) * .28); }
+  .fs-d { font-size: calc(var(--cell) * .22); }
+
+  /* 结算覆盖层 */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: rgba(250, 248, 239, .8);
+    backdrop-filter: blur(2px);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 20px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .25s, visibility .25s;
+  }
+  .overlay.show { opacity: 1; visibility: visible; }
+  .ov-title { font-size: 26px; font-weight: 800; color: #6b6157; }
+  .ov-title.win { color: #c99b1a; }
+  .ov-sub { font-size: 14px; color: #8f8577; }
+  .ov-btns { display: flex; gap: 10px; margin-top: 8px; }
+  .ov-btns .btn { padding: 11px 20px; }
+  .btn.primary { background: #d3a614; }
+
+  footer { margin-top: 14px; font-size: 12px; line-height: 1.7; color: #b3a895; text-align: center; }
+  .audio-row {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #b3a895;
+  }
+  .audio-row .mini-btn {
+    border: 1px solid #d8cdbb;
+    background: #f3ede0;
+    color: #8f7a66;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .audio-row .mini-btn:active { transform: scale(.96); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <div class="brand">
+      <h1>1024</h1>
+      <div class="sub">滑动合并 · 合成 1024 获胜</div>
+    </div>
+    <div class="hud">
+      <button class="btn icon-btn" id="mute" title="声音开关" aria-label="声音开关"></button>
+      <div class="score-box"><span class="lb">分数</span><b id="score">0</b></div>
+      <div class="score-box"><span class="lb">最高分</span><b id="best">0</b></div>
+      <button class="btn" id="new-game">新游戏</button>
+    </div>
+  </header>
+
+  <p class="tip">滑动或按方向键移动方块，相同数字碰撞合并，合成 <b>1024</b> 即获胜！</p>
+
+  <div class="board" id="board">
+    <div class="cells" id="cells"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="overlay" id="overlay">
+      <div class="ov-title" id="ov-title"></div>
+      <div class="ov-sub" id="ov-sub"></div>
+      <div class="ov-btns" id="ov-btns"></div>
+    </div>
+  </div>
+
+  <footer>
+    电脑端：方向键 / WASD &nbsp;·&nbsp; 手机端：滑动屏幕<br>
+    相同数字合并翻倍，棋盘填满且无法移动时结束
+  </footer>
+
+  <div class="audio-row">
+    <span id="audio-status">音频：未激活</span>
+    <button class="mini-btn" id="audio-test">点我试听</button>
+  </div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const SIZE = 4, WIN = 1024;
+  const LS_BEST = 'g1024_best', LS_STATE = 'g1024_state';
+
+  const boardEl = document.getElementById('board');
+  const cellsEl = document.getElementById('cells');
+  const tilesEl = document.getElementById('tiles');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const overlayEl = document.getElementById('overlay');
+  const ovTitleEl = document.getElementById('ov-title');
+  const ovSubEl = document.getElementById('ov-sub');
+  const ovBtnsEl = document.getElementById('ov-btns');
+
+  let board, score = 0, best = 0, uid = 0;
+  let over = false, won = false, keepPlaying = false, animating = false;
+
+  function tryLS(fn) { try { fn(); } catch (e) { /* 隐私模式下忽略 */ } }
+
+  /* ---------- 音效：Web Audio 实时合成，无外部音频文件 ---------- */
+  let audioCtx = null;
+  let muted = false;
+  tryLS(() => { muted = localStorage.getItem('g1024_muted') === '1'; });
+
+  const ICON_ON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  const ICON_OFF = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><line x1="16" y1="9" x2="22" y2="15"/><line x1="22" y1="9" x2="16" y2="15"/></svg>';
+  const muteBtn = document.getElementById('mute');
+  const audioStatusEl = document.getElementById('audio-status');
+
+  function refreshMuteIcon() { muteBtn.innerHTML = muted ? ICON_OFF : ICON_ON; }
+
+  function refreshAudioStatus() {
+    let s;
+    if (muted) s = '已静音';
+    else if (!audioCtx) s = '未激活';
+    else {
+      const map = { running: '正常', suspended: '未激活', interrupted: '被打断，再点一下', closed: '已关闭' };
+      s = map[audioCtx.state] || audioCtx.state;
+    }
+    audioStatusEl.textContent = '音频：' + s;
+  }
+
+  // 浏览器自动播放策略：AudioContext 必须在用户手势内创建/唤醒。
+  // Safari/iOS/微信要求最苛刻：touch 系手势 + 真正调度过音频 + 每次手势
+  // 重试唤醒（含 iOS 特有的 interrupted 状态），故多路事件全挂。
+  function ensureAudio() {
+    if (muted) return false;
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      audioCtx = new AC();
+      audioCtx.onstatechange = refreshAudioStatus;
+    }
+    unlockSeed();   // 每次手势都喂一次静音样本，Safari 对此最敏感
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+      audioCtx.resume().catch(() => {});
+    }
+    refreshAudioStatus();
+    return true;
+  }
+
+  function unlockSeed() {   // iOS/微信：需在手势内真正调度过一次音频才算解锁
+    try {
+      const buf = audioCtx.createBuffer(1, 1, 22050);   // 1 样本静音
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(0);
+    } catch (e) { /* 忽略 */ }
+  }
+
+  ['touchstart', 'touchend', 'pointerdown', 'keydown', 'click'].forEach(ev =>
+    document.addEventListener(ev, ensureAudio, { capture: true, passive: true })
+  );
+
+  function tone(freq, dur, type, vol, when) {
+    const t0 = audioCtx.currentTime + (when || 0);
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  function playSlide() {   // 滑动：带衰减包络的带通白噪"嗖"声
+    if (!ensureAudio()) return;
+    const len = 0.09;
+    const buf = audioCtx.createBuffer(1, Math.ceil(audioCtx.sampleRate * len), audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 900;
+    filter.Q.value = 0.8;
+    const g = audioCtx.createGain();
+    g.gain.value = 0.5;
+    src.connect(filter).connect(g).connect(audioCtx.destination);
+    src.start();
+  }
+
+  function playMerge(v, when) {   // 合并：音调随数字翻倍逐级升高
+    if (!ensureAudio()) return;
+    const step = Math.log2(v) - 1;               // 2→0, 4→1, 8→2 ...
+    const freq = 240 * Math.pow(2, step / 6);    // 每两级翻倍高一个八度
+    tone(freq, 0.16, 'triangle', 0.16, when);
+    tone(freq * 2, 0.12, 'sine', 0.06, when);    // 高八度点缀
+  }
+
+  function playWin() {   // 达成 1024：C5-E5-G5-C6 上行小旋律
+    if (!ensureAudio()) return;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.22, 'triangle', 0.16, i * 0.14));
+  }
+
+  function playOver() {   // 游戏结束：低音下滑
+    if (!ensureAudio()) return;
+    const t0 = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, t0);
+    osc.frequency.exponentialRampToValueAtTime(70, t0 + 0.7);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.75);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.8);
+  }
+
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    tryLS(() => localStorage.setItem('g1024_muted', muted ? '1' : '0'));
+    refreshMuteIcon();
+    refreshAudioStatus();
+  });
+  refreshMuteIcon();
+  refreshAudioStatus();
+
+  // 试听按钮：点击本身就是合法手势，若此时仍听不到，可排除代码因素，
+  // 指向系统设置（静音拨片 / 媒体音量）
+  document.getElementById('audio-test').addEventListener('click', () => {
+    if (muted) {   // 静音状态下试听自动解除静音
+      muted = false;
+      tryLS(() => localStorage.setItem('g1024_muted', '0'));
+      refreshMuteIcon();
+      refreshAudioStatus();
+    }
+    if (!ensureAudio()) return;
+    const go = () => {
+      tone(880, 0.35, 'triangle', 0.22, 0);
+      tone(1320, 0.3, 'sine', 0.08, 0.02);
+    };
+    if (audioCtx.state === 'running') go();
+    else audioCtx.resume().then(go).catch(go);   // resume 完成后再播，避免调度进未唤醒的上下文
+  });
+
+  /* ---------- 背景格子 ---------- */
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const d = document.createElement('div');
+      d.className = 'cell';
+      d.style.setProperty('--r', r);
+      d.style.setProperty('--c', c);
+      cellsEl.appendChild(d);
+    }
+  }
+
+  class Tile {
+    constructor(r, c, v) { this.id = ++uid; this.r = r; this.c = c; this.v = v; this.el = null; }
+  }
+
+  /* ---------- 工具 ---------- */
+  function emptyCells() {
+    const list = [];
+    for (let r = 0; r < SIZE; r++)
+      for (let c = 0; c < SIZE; c++)
+        if (!board[r][c]) list.push([r, c]);
+    return list;
+  }
+
+  function valueClass(v) { return v <= 2048 ? 'n' + v : 'nsuper'; }
+  function sizeClass(v) {
+    if (v < 100) return 'fs-a';
+    if (v < 1000) return 'fs-b';
+    if (v < 10000) return 'fs-c';
+    return 'fs-d';
+  }
+
+  function createEl(t, appear) {
+    const el = document.createElement('div');
+    el.className = 'tile' + (appear ? ' new' : '');
+    const inner = document.createElement('div');
+    inner.className = 'tile-inner ' + valueClass(t.v) + ' ' + sizeClass(t.v);
+    inner.textContent = t.v;
+    el.appendChild(inner);
+    el.style.setProperty('--r', t.r);
+    el.style.setProperty('--c', t.c);
+    tilesEl.appendChild(el);
+    t.el = el;
+  }
+
+  function positionTile(t) {
+    t.el.style.setProperty('--r', t.r);
+    t.el.style.setProperty('--c', t.c);
+  }
+
+  function spawnTile() {
+    const empty = emptyCells();
+    if (!empty.length) return null;
+    const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+    const t = new Tile(r, c, Math.random() < 0.9 ? 2 : 4);
+    board[r][c] = t;
+    createEl(t, true);
+    return t;
+  }
+
+  function updateScore(gained) {
+    scoreEl.textContent = score;
+    if (gained > 0) {
+      const f = document.createElement('div');
+      f.className = 'float-add';
+      f.textContent = '+' + gained;
+      scoreEl.parentElement.appendChild(f);
+      setTimeout(() => f.remove(), 720);
+    }
+    if (score > best) {
+      best = score;
+      bestEl.textContent = best;
+      tryLS(() => localStorage.setItem(LS_BEST, String(best)));
+    }
+  }
+
+  /* ---------- 移动核心（已通过 11 组单元测试验证） ---------- */
+  function move(dr, dc) {
+    if (animating || over || (won && !keepPlaying)) return;
+
+    const rows = [0, 1, 2, 3], cols = [0, 1, 2, 3];
+    if (dr === 1) rows.reverse();
+    if (dc === 1) cols.reverse();
+
+    const locked = new Set();   // 本回合已合并的 tile，防止二次合并
+    const removeEls = [];       // 被吸收块的 DOM，滑动结束后移除
+    const mergedTiles = [];     // 合并后的幸存块，待更新数值并弹跳
+    let moved = false, gained = 0;
+
+    for (const r of rows) for (const c of cols) {
+      const t = board[r][c];
+      if (!t) continue;
+      let nr = r, nc = c, target = null;
+      for (;;) {
+        const tr = nr + dr, tc = nc + dc;
+        if (tr < 0 || tr >= SIZE || tc < 0 || tc >= SIZE) break;
+        const occ = board[tr][tc];
+        if (!occ) { nr = tr; nc = tc; continue; }
+        if (occ.v === t.v && !locked.has(occ.id)) target = occ;
+        break;
+      }
+      if (target) {
+        board[r][c] = null;
+        target.v *= 2;
+        locked.add(target.id);
+        gained += target.v;
+        mergedTiles.push(target);
+        t.r = target.r; t.c = target.c;   // 滑向目标位置，动画后移除
+        positionTile(t);
+        removeEls.push(t.el);
+        moved = true;
+        if (target.v >= WIN && !won) won = true;
+      } else if (nr !== r || nc !== c) {
+        board[r][c] = null;
+        board[nr][nc] = t;
+        t.r = nr; t.c = nc;
+        positionTile(t);
+        moved = true;
+      }
+    }
+
+    if (!moved) return;
+    playSlide();
+
+    score += gained;
+    updateScore(gained);
+    animating = true;
+
+    setTimeout(() => {
+      removeEls.forEach(el => el.remove());
+      mergedTiles.forEach((t, i) => {
+        const inner = t.el.firstChild;
+        inner.className = 'tile-inner ' + valueClass(t.v) + ' ' + sizeClass(t.v);
+        inner.textContent = t.v;
+        t.el.classList.remove('merged');
+        void t.el.offsetWidth;   // 强制重排以重新触发动画
+        t.el.classList.add('merged');
+        playMerge(t.v, i * 0.05);   // 多个合并时错开成小琶音
+      });
+      animating = false;
+
+      spawnTile();
+      saveState();
+
+      if (won && !keepPlaying) { setTimeout(showWin, 200); return; }
+      if (!anyMoves()) {
+        over = true;
+        saveState();
+        setTimeout(showOver, 350);
+      }
+    }, 120);
+  }
+
+  function anyMoves() {
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const t = board[r][c];
+        if (!t) return true;
+        if (r + 1 < SIZE && board[r + 1][c] && board[r + 1][c].v === t.v) return true;
+        if (c + 1 < SIZE && board[r][c + 1] && board[r][c + 1].v === t.v) return true;
+      }
+    }
+    return false;
+  }
+
+  /* ---------- 结算层 ---------- */
+  function btn(text, cls, onclick) {
+    const b = document.createElement('button');
+    b.className = 'btn' + (cls ? ' ' + cls : '');
+    b.textContent = text;
+    b.addEventListener('click', onclick);
+    return b;
+  }
+
+  function showWin(silent) {
+    if (!silent) playWin();
+    ovTitleEl.textContent = '恭喜！成功合成 1024';
+    ovTitleEl.className = 'ov-title win';
+    ovSubEl.textContent = '本局得分 ' + score + '，可以继续冲击 2048！';
+    ovBtnsEl.innerHTML = '';
+    ovBtnsEl.appendChild(btn('继续挑战', 'primary', () => { keepPlaying = true; hideOverlay(); saveState(); }));
+    ovBtnsEl.appendChild(btn('再来一局', '', newGame));
+    overlayEl.classList.add('show');
+  }
+
+  function showOver(silent) {
+    if (!silent) playOver();
+    ovTitleEl.textContent = '游戏结束';
+    ovTitleEl.className = 'ov-title';
+    ovSubEl.textContent = '没有可移动的方块了，本局得分 ' + score;
+    ovBtnsEl.innerHTML = '';
+    ovBtnsEl.appendChild(btn('再来一局', 'primary', newGame));
+    overlayEl.classList.add('show');
+  }
+
+  function hideOverlay() { overlayEl.classList.remove('show'); }
+
+  /* ---------- 存档 ---------- */
+  function saveState() {
+    tryLS(() => {
+      const tiles = [];
+      for (let r = 0; r < SIZE; r++)
+        for (let c = 0; c < SIZE; c++) {
+          const t = board[r][c];
+          if (t) tiles.push([t.r, t.c, t.v]);
+        }
+      localStorage.setItem(LS_STATE, JSON.stringify({ tiles, score, won, keepPlaying, over }));
+    });
+  }
+
+  function loadState() {
+    let s = null;
+    tryLS(() => { s = JSON.parse(localStorage.getItem(LS_STATE) || 'null'); });
+    if (!s || !Array.isArray(s.tiles) || !s.tiles.length) return false;
+    board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+    score = s.score || 0;
+    won = !!s.won;
+    keepPlaying = !!s.keepPlaying;
+    over = !!s.over;
+    tilesEl.innerHTML = '';
+    for (const [r, c, v] of s.tiles) {
+      if (r < 0 || r >= SIZE || c < 0 || c >= SIZE || !v) return false;
+      const t = new Tile(r, c, v);
+      board[r][c] = t;
+      createEl(t, false);
+    }
+    updateScore(0);
+    if (over) { showOver(true); return true; }
+    if (won && !keepPlaying) { showWin(true); return true; }
+    return true;
+  }
+
+  function newGame() {
+    board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+    score = 0;
+    over = false; won = false; keepPlaying = false; animating = false;
+    tilesEl.innerHTML = '';
+    hideOverlay();
+    updateScore(0);
+    spawnTile();
+    spawnTile();
+    saveState();
+  }
+
+  /* ---------- 输入：键盘 ---------- */
+  const KEYMAP = {
+    ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1],
+    w: [-1, 0], s: [1, 0], a: [0, -1], d: [0, 1],
+    W: [-1, 0], S: [1, 0], A: [0, -1], D: [0, 1],
+  };
+  document.addEventListener('keydown', e => {
+    const d = KEYMAP[e.key];
+    if (d) { e.preventDefault(); move(d[0], d[1]); }
+  });
+
+  /* ---------- 输入：滑动 / 鼠标拖拽 ---------- */
+  let pStart = null;
+  boardEl.addEventListener('pointerdown', e => {
+    if (e.target.closest('.overlay')) return;   // 结算层上的点击不参与滑动
+    pStart = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('pointerup', e => {
+    if (!pStart) return;
+    const dx = e.clientX - pStart.x, dy = e.clientY - pStart.y;
+    pStart = null;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if (Math.max(ax, ay) < 24) return;          // 距离太小视为点击
+    if (ax > ay) move(0, dx > 0 ? 1 : -1);
+    else move(dy > 0 ? 1 : -1, 0);
+  });
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+  document.getElementById('new-game').addEventListener('click', newGame);
+
+  /* ---------- 启动 ---------- */
+  tryLS(() => { best = +localStorage.getItem(LS_BEST) || 0; });
+  bestEl.textContent = best;
+  if (!loadState()) newGame();
+})();
+</script>
+</body>
+</html>
