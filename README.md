@@ -2,10 +2,7 @@
 
 经典的 1024 数字合成游戏，单文件实现，零依赖，纯前端。
 
-**在线游玩**：
-
-- Cloudflare Pages（国内访问更稳）：https://game-1024.pages.dev/
-- GitHub Pages：https://brentdai.github.io/Game_1024/
+**在线游玩**：https://game-1024.pages.dev/
 
 ## 玩法
 
